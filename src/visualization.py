@@ -1,15 +1,15 @@
 import pandas as pd
 import streamlit as st
 
-# Importar funciones de processing.py
-from processing import (
+# Importar funciones y constantes de processing.py
+from .processing import (
     preparar_dataframes,
     aplicar_transformaciones,
     procesar_picking,
     procesar_chequeo,
     unir_datos,
     create_grouped_report,
-    PK_IMAGEN  # Importar constante PK_IMAGEN
+    PK_IMAGEN  # Añadida esta importación
 )
 
 def highlight_cells(df, rendimiento_min, rendimiento_mediana, rendimiento_max):
@@ -79,8 +79,8 @@ def main():
     try:
         # Configuración de la página
         st.set_page_config(page_title="Rendimiento de Producción", 
-                           layout="wide", 
-                           initial_sidebar_state="collapsed")
+                          layout="wide", 
+                          initial_sidebar_state="collapsed")
         
         st.title('Rendimiento de Producción')
         
@@ -109,6 +109,5 @@ def main():
         st.error(f"Hubo un error: {e}")
         st.exception(e)  # Muestra el traceback completo en modo desarrollo
 
-# Ejecutar la función principal
 if __name__ == "__main__":
     main()
