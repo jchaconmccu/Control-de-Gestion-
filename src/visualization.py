@@ -1,7 +1,5 @@
 import pandas as pd
 import streamlit as st
-
-# Importar funciones y constantes de processing.py
 from .processing import (
     preparar_dataframes,
     aplicar_transformaciones,
@@ -9,7 +7,7 @@ from .processing import (
     procesar_chequeo,
     unir_datos,
     create_grouped_report,
-    PK_IMAGEN  # Añadida esta importación
+    PK_IMAGEN
 )
 
 def highlight_cells(df, rendimiento_min, rendimiento_mediana, rendimiento_max):
@@ -28,86 +26,68 @@ def highlight_cells(df, rendimiento_min, rendimiento_mediana, rendimiento_max):
         # Aplicar estilo para usuarios PK_IMAGEN
         if is_pk_imagen:
             rendimiento_idx = df.columns.get_loc('Rendimiento')
-            row_styles[rendimiento_idx] = 'background-color: #CCCCCC; color: #777777; font-style: italic'  # Gris para indicar que no se evalúa
-        # Optimizar aplicación de estilos para columnas específicas (solo para no PK_IMAGEN)
+            row_styles[rendimiento_idx] = 'background-color: #CCCCCC; color: #777777; font-style: italic'
         elif pd.notna(row['Rendimiento']):
             rendimiento_idx = df.columns.get_loc('Rendimiento')
             if row['Rendimiento'] <= rendimiento_min:
-                row_styles[rendimiento_idx] = 'background-color: #FF9999; color: black'  # Rojo
+                row_styles[rendimiento_idx] = 'background-color: #FF9999; color: black'
             elif row['Rendimiento'] <= rendimiento_mediana:
-                row_styles[rendimiento_idx] = 'background-color: #FFFF99; color: black'  # Amarillo
+                row_styles[rendimiento_idx] = 'background-color: #FFFF99; color: black'
             else:
-                row_styles[rendimiento_idx] = 'background-color: #90EE90; color: black'  # Verde
+                row_styles[rendimiento_idx] = 'background-color: #90EE90; color: black'
         
         if pd.notna(row['% Error']):
             error_idx = df.columns.get_loc('% Error')
             if row['% Error'] > 0.05:
-                row_styles[error_idx] = 'background-color: #FF9999; color: black'  # Rojo
+                row_styles[error_idx] = 'background-color: #FF9999; color: black'
             else:
-                row_styles[error_idx] = 'background-color: #90EE90; color: black'  # Verde
+                row_styles[error_idx] = 'background-color: #90EE90; color: black'
         
         return row_styles
 
-    # Aplicar estilos y formatear
-    styled_df = df.style.apply(apply_styles, axis=1).format({
+    return df.style.apply(apply_styles, axis=1).format({
         '% Error': "{:.2f} %",
         'Rendimiento': "{:.2f}",
         'Cjs c/ Error': "{:,.0f}"
-    }, na_rep="N/A")  # Usar N/A para valores nulos en rendimiento (PK_IMAGEN)
-
-    return styled_df
-
-@st.cache_data
-def load_and_process_data():
-    """Carga y procesa todos los datos, con caché para mejorar rendimiento."""
-    # Cargar y preparar datos
-    df_picking, df_chequeo = preparar_dataframes()
-    
-    # Aplicar transformaciones
-    df_picking, df_chequeo = aplicar_transformaciones(df_picking, df_chequeo)
-    
-    # Procesar picking y chequeo
-    df_valid = procesar_picking(df_picking)
-    pallet_grouped = procesar_chequeo(df_chequeo)
-    
-    # Unir datos
-    df_final = unir_datos(df_valid, pallet_grouped)
-    
-    return df_final
+    }, na_rep="N/A")
 
 def main():
+    """Función principal de visualización."""
     try:
-        # Configuración de la página
-        st.set_page_config(page_title="Rendimiento de Producción", 
-                          layout="wide", 
-                          initial_sidebar_state="collapsed")
-        
         st.title('Rendimiento de Producción')
         
-        # Usar caché para cargar los datos
-        df_final = load_and_process_data()
+        # Cargar y procesar datos
+        df_picking, df_chequeo = preparar_dataframes()
         
-        # Generar reporte
-        df_final_report, min_rendimiento, mediana_rendimiento, max_rendimiento = create_grouped_report(df_final)
-        
-        # Aplicar estilos
-        styled_df = highlight_cells(df_final_report, 
-                                  min_rendimiento, 
-                                  mediana_rendimiento, 
-                                  max_rendimiento)
-        
-        # Mostrar dataframe con estilos
-        st.dataframe(styled_df, height=800)
-        
-        # Mostrar métricas
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Rendimiento mínimo", f"{min_rendimiento:.2f}" if not pd.isna(min_rendimiento) else "N/A")
-        col2.metric("Rendimiento mediano", f"{mediana_rendimiento:.2f}" if not pd.isna(mediana_rendimiento) else "N/A")
-        col3.metric("Rendimiento máximo", f"{max_rendimiento:.2f}" if not pd.isna(max_rendimiento) else "N/A")
+        if df_picking is not None and df_chequeo is not None:
+            # Aplicar transformaciones
+            df_picking, df_chequeo = aplicar_transformaciones(df_picking, df_chequeo)
+            
+            # Procesar picking y chequeo
+            df_valid = procesar_picking(df_picking)
+            pallet_grouped = procesar_chequeo(df_chequeo)
+            
+            # Unir datos
+            df_final = unir_datos(df_valid, pallet_grouped)
+            
+            # Generar reporte
+            df_final_report, min_rendimiento, mediana_rendimiento, max_rendimiento = create_grouped_report(df_final)
+            
+            # Aplicar estilos
+            styled_df = highlight_cells(df_final_report, 
+                                      min_rendimiento, 
+                                      mediana_rendimiento, 
+                                      max_rendimiento)
+            
+            # Mostrar dataframe con estilos
+            st.dataframe(styled_df, height=800)
+            
+            # Mostrar métricas
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Rendimiento mínimo", f"{min_rendimiento:.2f}" if not pd.isna(min_rendimiento) else "N/A")
+            col2.metric("Rendimiento mediano", f"{mediana_rendimiento:.2f}" if not pd.isna(mediana_rendimiento) else "N/A")
+            col3.metric("Rendimiento máximo", f"{max_rendimiento:.2f}" if not pd.isna(max_rendimiento) else "N/A")
         
     except Exception as e:
-        st.error(f"Hubo un error: {e}")
-        st.exception(e)  # Muestra el traceback completo en modo desarrollo
-
-if __name__ == "__main__":
-    main()
+        st.error(f"Error en la visualización: {str(e)}")
+        st.exception(e)
