@@ -3,6 +3,7 @@ import numpy as np
 import streamlit as st
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 import io
 
 # Definición de constantes
@@ -13,7 +14,7 @@ ORDER_EMPRESAS = ["SAEP", "SINERGY", "J. CATALAN Y CIA. LTDA", "IMAGEN", "J. CAT
 FOLDER_ID = '1rAACqx1K3-LnammeFuGPsbWV7Tqa7MbL'
 
 def get_drive_service():
-    """Configura y retorna el servicio de Google Drive usando los secretos de Streamlit."""
+    """Configura y retorna el servicio de Google Drive."""
     credentials = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=['https://www.googleapis.com/auth/drive.readonly']
@@ -47,12 +48,10 @@ def download_excel_from_drive(service, filename):
             
         file_content.seek(0)
         return file_content
-        
     except Exception as e:
         st.error(f"Error al descargar {filename}: {str(e)}")
         return None
 
-@st.cache_data
 def preparar_dataframes():
     """Carga y preprocesa los dataframes de picking y chequeo."""
     try:
@@ -68,10 +67,6 @@ def preparar_dataframes():
         # Cargar DataFrames
         df_picking = pd.read_excel(picking_content)
         df_chequeo = pd.read_excel(chequeo_content)
-        
-        # Verificar que los DataFrames no estén vacíos
-        if df_picking.empty or df_chequeo.empty:
-            raise ValueError("Los archivos están vacíos")
         
         # Renombrar columnas
         df_chequeo.rename(columns={
@@ -90,9 +85,70 @@ def preparar_dataframes():
             df_chequeo['empresa'] = df_chequeo['empresa'].str.strip()
             
         return df_picking, df_chequeo
-        
     except Exception as e:
         st.error(f"Error en preparar_dataframes: {str(e)}")
         return None, None
 
-# El resto de las funciones (aplicar_transformaciones, procesar_picking, etc.) permanecen igual
+def aplicar_transformaciones(df_picking, df_chequeo):
+    """Aplica transformaciones específicas a los dataframes."""
+    try:
+        # Transformaciones CAJA PICKEADA
+        mask_imagen = (df_picking['Tipo de pedido'] == '3033-IMAGEN VIÑA') & \
+                     (df_picking['Empresa'] == 'J. CATALAN Y CIA. LTDA') & \
+                     (df_picking['id usuario'].isin(PK_IMAGEN))
+        df_picking.loc[mask_imagen, 'Empresa'] = 'IMAGEN'
+        
+        mask_redBull = (df_picking['Empresa'] == 'J. CATALAN Y CIA. LTDA') & \
+                       (df_picking['Zona de Origen'].isin(ZONA_TRABAJO))
+        df_picking.loc[mask_redBull, 'Empresa'] = 'J. CATALAN Y CIA. LTDA RED BULL'
+        
+        # Transformaciones PALLET CHEQUEADO
+        mask_chk_imagen = (df_chequeo['Tipo de pedido'] == '3033-IMAGEN VIÑA') & \
+                         (df_chequeo['empresa'] == 'J. CATALAN Y CIA. LTDA') & \
+                         (df_chequeo['id usuario'].isin(PK_IMAGEN))
+        df_chequeo.loc[mask_chk_imagen, 'empresa'] = 'IMAGEN'
+        
+        if 'zona_de_trabajo' in df_chequeo.columns:
+            mask_chk_redbull = (df_chequeo['empresa'] == 'J. CATALAN Y CIA. LTDA') & \
+                              (df_chequeo['zona_de_trabajo'].isin(ZONA_CHEQUEO))
+            df_chequeo.loc[mask_chk_redbull, 'empresa'] = 'J. CATALAN Y CIA. LTDA RED BULL'
+        elif 'Zona de trabajo' in df_chequeo.columns:
+            mask_chk_redbull = (df_chequeo['empresa'] == 'J. CATALAN Y CIA. LTDA') & \
+                              (df_chequeo['Zona de trabajo'].isin(ZONA_CHEQUEO))
+            df_chequeo.loc[mask_chk_redbull, 'empresa'] = 'J. CATALAN Y CIA. LTDA RED BULL'
+        
+        # Filtrar empresas
+        df_picking = df_picking[df_picking['Empresa'].isin(ORDER_EMPRESAS)]
+        df_chequeo = df_chequeo[df_chequeo['empresa'].isin(ORDER_EMPRESAS)]
+        
+        return df_picking, df_chequeo
+    except Exception as e:
+        st.error(f"Error en aplicar_transformaciones: {str(e)}")
+        return None, None
+
+def procesar_picking(df_picking):
+    """Procesa el dataframe de picking para calcular rendimientos."""
+    try:
+        # ... resto del código de procesar_picking ...
+        pass
+    except Exception as e:
+        st.error(f"Error en procesar_picking: {str(e)}")
+        return None
+
+def procesar_chequeo(df_chequeo):
+    """Procesa el dataframe de chequeo para calcular errores."""
+    try:
+        # ... resto del código de procesar_chequeo ...
+        pass
+    except Exception as e:
+        st.error(f"Error en procesar_chequeo: {str(e)}")
+        return None
+
+def create_grouped_report(df_final):
+    """Genera el reporte agrupado desde un DataFrame."""
+    try:
+        # ... resto del código de create_grouped_report ...
+        pass
+    except Exception as e:
+        st.error(f"Error en create_grouped_report: {str(e)}")
+        return None, None, None, None
