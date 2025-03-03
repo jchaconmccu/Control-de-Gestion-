@@ -309,9 +309,9 @@ def format_dataframe(df):
             df_formatted['Cjs c/ Error'] = df_formatted['Cjs c/ Error'].fillna(0).astype(int)
         
         if 'Rendimiento' in df_formatted.columns:
-    # Forzar conversión a entero de forma explícita
-             df_formatted['Rendimiento'] = df_formatted['Rendimiento'].astype(float).round(0).astype(int)
-             
+            # Reemplazar NaN con 0 antes de convertir a entero
+            df_formatted['Rendimiento'] = df_formatted['Rendimiento'].fillna(0).astype(float).round(0).astype(int)
+        
         if '% Error' in df_formatted.columns:
             df_formatted['% Error'] = df_formatted['% Error'].fillna(0).round(2)
         
