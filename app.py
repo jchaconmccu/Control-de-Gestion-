@@ -281,17 +281,17 @@ def run_visualization():
                 # AGREGAR ESTAS LÍNEAS AQUÍ
                 # Forzar que Rendimiento sea entero antes de aplicar estilos
                # Forzar que Rendimiento sea entero antes de aplicar estilos
-            if 'Rendimiento' in df_final_report.columns:
-                # Primero reemplazar NaN con 0, luego convertir a entero
-                df_final_report['Rendimiento'] = df_final_report['Rendimiento'].fillna(0).astype(float).round(0).astype(int)
-                styled_df = highlight_cells(df_final_report, min_rendimiento, mediana_rendimiento, max_rendimiento)
-                
-                # Calcular altura automáticamente basada en el número de filas
-                row_height = 35  # altura aproximada por fila en píxeles
-                padding = 40     # espacio para encabezados
-                table_height = min(500, len(df_final_report) * row_height + padding)
-                
-                st.dataframe(styled_df, use_container_width=True, height=table_height, hide_index=True)
+                if 'Rendimiento' in df_final_report.columns:
+                    # Primero reemplazar NaN con 0, luego convertir a entero
+                    df_final_report['Rendimiento'] = df_final_report['Rendimiento'].fillna(0).astype(float).round(0).astype(int)
+                    styled_df = highlight_cells(df_final_report, min_rendimiento, mediana_rendimiento, max_rendimiento)
+                    
+                    # Calcular altura automáticamente basada en el número de filas
+                    row_height = 35  # altura aproximada por fila en píxeles
+                    padding = 40     # espacio para encabezados
+                    table_height = min(500, len(df_final_report) * row_height + padding)
+                    
+                    st.dataframe(styled_df, use_container_width=True, height=table_height, hide_index=True)
 
             # 2. Nivel de Carga y Detalle de Descuentos en la columna 2
             with col2:
