@@ -318,13 +318,7 @@ def run_visualization():
                     descuento_rows = len(descuento_summary)
                     descuento_height = min(300, descuento_rows * row_height + padding)
                     
-                    # Aplicar formato solo a columnas numéricas
-                    st.dataframe(
-                        descuento_summary.style.format(format_dict),
-                        use_container_width=True,
-                        height=descuento_height,
-                        hide_index=True
-                    )
+             
                 else:
                     st.info("No hay datos de descuentos disponibles.")
 
