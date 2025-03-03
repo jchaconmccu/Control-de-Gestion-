@@ -309,7 +309,7 @@ def format_dataframe(df):
             df_formatted['Cjs c/ Error'] = df_formatted['Cjs c/ Error'].fillna(0).astype(int)
         
         if 'Rendimiento' in df_formatted.columns:
-            # Rendimiento como entero (en lugar de decimal)
+            # Asegurar que el rendimiento sea un entero 
             df_formatted.loc[df_formatted['Rendimiento'].notna(), 'Rendimiento'] = df_formatted.loc[df_formatted['Rendimiento'].notna(), 'Rendimiento'].round(0).astype(int)
         
         if '% Error' in df_formatted.columns:
@@ -451,11 +451,11 @@ def highlight_cells(df, min_rendimiento, mediana_rendimiento, max_rendimiento):
         if 'USUARIO' in df.columns:
             styled = styled.applymap(usuario_color, subset=['USUARIO'])
             
-        # Formatear todas las columnas numéricas
+        # Formatear todas las columnas numéricas - Asegurar que Rendimiento no tiene decimales
         if 'CAJAS' in df.columns:
             styled = styled.format({'CAJAS': '{:,.0f}'})
         if 'Rendimiento' in df.columns:
-            styled = styled.format({'Rendimiento': '{:,.0f}'})
+            styled = styled.format({'Rendimiento': '{:,.0f}'})  # Sin decimales
         if 'Cjs c/ Error' in df.columns:
             styled = styled.format({'Cjs c/ Error': '{:,.0f}'})
         if '% Error' in df.columns:
@@ -468,6 +468,7 @@ def highlight_cells(df, min_rendimiento, mediana_rendimiento, max_rendimiento):
         import traceback
         traceback.print_exc()
         return df.style  # Devolver un estilo básico sin formateo
+    
     
 def create_nivel_carga_summary(df_picking):
     """Crea el resumen de nivel de carga, incluyendo Sub-LPN y LPN."""
