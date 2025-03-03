@@ -309,9 +309,9 @@ def format_dataframe(df):
             df_formatted['Cjs c/ Error'] = df_formatted['Cjs c/ Error'].fillna(0).astype(int)
         
         if 'Rendimiento' in df_formatted.columns:
-            # Asegurar que el rendimiento sea un entero 
-            df_formatted.loc[df_formatted['Rendimiento'].notna(), 'Rendimiento'] = df_formatted.loc[df_formatted['Rendimiento'].notna(), 'Rendimiento'].round(0).astype(int)
-        
+    # Forzar conversión a entero de forma explícita
+             df_formatted['Rendimiento'] = df_formatted['Rendimiento'].astype(float).round(0).astype(int)
+             
         if '% Error' in df_formatted.columns:
             df_formatted['% Error'] = df_formatted['% Error'].fillna(0).round(2)
         
@@ -469,7 +469,7 @@ def highlight_cells(df, min_rendimiento, mediana_rendimiento, max_rendimiento):
         traceback.print_exc()
         return df.style  # Devolver un estilo básico sin formateo
     
-    
+
 def create_nivel_carga_summary(df_picking):
     """Crea el resumen de nivel de carga, incluyendo Sub-LPN y LPN."""
     try:
