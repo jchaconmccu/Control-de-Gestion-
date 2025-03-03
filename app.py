@@ -238,13 +238,21 @@ def run_visualization():
                 opacity=0.9
             )
 
-            # Ajustar layout para mejor visualización
-            fig_error.update_layout(
-                height=220,
-                margin=dict(t=30, b=50, l=30, r=30),
+            # Ajustar tamaño y disposición de los indicadores gauge
+            fig_rendimiento.update_layout(
+                autosize=True,
+                height=200,  # Altura fija más pequeña
+                margin=dict(t=30, b=80, l=30, r=30),
             )
-            # 1. Métricas principales
-            col1, col2, col3, col4 = st.columns(4)
+
+            fig_error.update_layout(
+                autosize=True,
+                height=200,  # Altura fija más pequeña
+                margin=dict(t=30, b=80, l=30, r=30),
+            )
+
+            # Crear columnas con proporciones más adecuadas para los indicadores
+            col1, col2, col3, col4 = st.columns([0.75, 1.5, 1.5, 0.75])
             
             col1.metric("Fecha de Reporte", fecha_reporte)
             with col2:
@@ -255,8 +263,13 @@ def run_visualization():
             # Línea separadora
             st.markdown("---")
 
+
             # Crear dos columnas
             col1, col2 = st.columns(2)
+
+            # Definir constantes para cálculo de altura
+            row_height = 35  # altura por fila en píxeles
+            padding = 40     # margen adicional
 
             # 1. Reporte Detallado en la columna 1
             with col1:
@@ -264,6 +277,12 @@ def run_visualization():
                 df_final_report = reorder_columns(df_final_report)
                 df_final_report = format_dataframe(df_final_report)
                 df_final_report = sort_dataframe(df_final_report)
+               
+                # AGREGAR ESTAS LÍNEAS AQUÍ
+                # Forzar que Rendimiento sea entero antes de aplicar estilos
+                if 'Rendimiento' in df_final_report.columns:
+                    df_final_report['Rendimiento'] = df_final_report['Rendimiento'].astype(float).round(0).astype(int)
+                
                 styled_df = highlight_cells(df_final_report, min_rendimiento, mediana_rendimiento, max_rendimiento)
                 
                 # Calcular altura automáticamente basada en el número de filas
@@ -279,8 +298,9 @@ def run_visualization():
                 st.markdown("### Nivel de Carga")
                 nivel_carga = create_nivel_carga_summary(df_picking_completo)
                 if not nivel_carga.empty:
-                    # Calcular altura para la tabla de nivel de carga
-                    nivel_height = min(250, len(nivel_carga) * row_height + padding)
+                    # Calcular altura para nivel de carga
+                    nivel_rows = len(nivel_carga)
+                    nivel_height = min(250, nivel_rows * row_height + padding)
                     st.dataframe(nivel_carga.style.format("{:,.0f}"), height=nivel_height)
                 
                 # Detalle de Descuentos
@@ -293,14 +313,17 @@ def run_visualization():
                         if pd.api.types.is_numeric_dtype(descuento_summary[col]):
                             format_dict[col] = "{:,.0f}"
                     
-                    # Calcular altura para la tabla de descuentos
-                    descuento_height = min(300, len(descuento_summary) * row_height + padding)
+                    # Calcular altura para detalle de descuentos
+                    descuento_rows = len(descuento_summary)
+                    descuento_height = min(300, descuento_rows * row_height + padding)
                     
                     # Aplicar formato solo a columnas numéricas
-                    st.dataframe(descuento_summary.style.format(format_dict), 
-                                use_container_width=True, 
-                                height=descuento_height, 
-                                hide_index=True)
+                    st.dataframe(
+                        descuento_summary.style.format(format_dict),
+                        use_container_width=True,
+                        height=descuento_height,
+                        hide_index=True
+                    )
                 else:
                     st.info("No hay datos de descuentos disponibles.")
 
