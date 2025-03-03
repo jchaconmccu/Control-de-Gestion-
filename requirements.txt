@@ -8,3 +8,4 @@ google-api-python-client>=2.79.0
 openpyxl>=3.1.1
 xlrd>=2.0.1
 xlsxwriter>=3.0.0
+plotly>=5.10.0
