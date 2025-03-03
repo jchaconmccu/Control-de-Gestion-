@@ -318,4 +318,4 @@ def create_grouped_report(df_final):
         print(f"Excepción detallada: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise ValueError(f"Error al crear el reporte agrupado: {str(e)}")
+        raise ValueError(f"Error al crear el reporte agrupado: {str(e)}")  

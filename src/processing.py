@@ -24,7 +24,6 @@ def get_drive_service():
 def download_excel_from_drive(service, filename):
     """Descarga un archivo Excel desde Google Drive."""
     try:
-        # Buscar el archivo
         results = service.files().list(
             q=f"name contains '{filename}' and '{FOLDER_ID}' in parents",
             pageSize=1,
@@ -37,7 +36,6 @@ def download_excel_from_drive(service, filename):
             
         file_id = files[0]['id']
         
-        # Descargar el archivo
         request = service.files().get_media(fileId=file_id)
         file_content = io.BytesIO()
         downloader = MediaIoBaseDownload(file_content, request)
@@ -52,19 +50,18 @@ def download_excel_from_drive(service, filename):
         st.error(f"Error al descargar {filename}: {str(e)}")
         return None
 
+@st.cache_data
 def preparar_dataframes():
     """Carga y preprocesa los dataframes de picking y chequeo."""
     try:
         service = get_drive_service()
         
-        # Descargar archivos
         picking_content = download_excel_from_drive(service, "Picking.xls")
         chequeo_content = download_excel_from_drive(service, "Pallet chek.xls")
         
         if picking_content is None or chequeo_content is None:
             raise ValueError("No se pudieron descargar los archivos necesarios")
         
-        # Cargar DataFrames
         df_picking = pd.read_excel(picking_content)
         df_chequeo = pd.read_excel(chequeo_content)
         
@@ -129,26 +126,264 @@ def aplicar_transformaciones(df_picking, df_chequeo):
 def procesar_picking(df_picking):
     """Procesa el dataframe de picking para calcular rendimientos."""
     try:
-        # ... resto del código de procesar_picking ...
-        pass
+       
+ 
+
+
+        # Crear una copia profunda para evitar SettingWithCopyWarning
+        df_picking = df_picking.copy()
+        
+        # Procesar fechas antes de dividir el DataFrame
+        df_picking['Hora Inicio'] = pd.to_datetime(df_picking['Hora Inicio'], errors='coerce', dayfirst=True)
+        df_picking['Hora Termino'] = pd.to_datetime(df_picking['Hora Termino'], errors='coerce', dayfirst=True)
+        
+        # Dividir el DataFrame
+        df_imagen = df_picking[(df_picking["Nivel de carga"] != "LPN") & (df_picking['id usuario'].isin(PK_IMAGEN))].copy()
+        df_others = df_picking[(df_picking["Nivel de carga"] != "LPN") & (~df_picking['id usuario'].isin(PK_IMAGEN))].copy()
+
+        # Para usuarios de PK_IMAGEN, solo acumulamos cajas
+        cajas_imagen = df_imagen.groupby(['id usuario', 'Empresa', 'Descripcion', 'Fecha Entrega']).agg(
+            Cajas=('Cajas', 'sum')
+        ).reset_index()
+        cajas_imagen['Rendimiento'] = np.nan
+        cajas_imagen['Hora_Inicio_Min'] = pd.NaT
+        cajas_imagen['Hora_Termino_Max'] = pd.NaT
+        cajas_imagen['Horas Picking'] = np.nan
+        
+        # Corregir fechas de término
+        mask_termino = df_others['Hora Termino'] < df_others['Hora Inicio']
+        df_others.loc[mask_termino, 'Hora Termino'] += pd.Timedelta(days=1)
+        
+        # Agrupar datos con observed=True
+        cajas_others = df_others.groupby(['id usuario', 'Empresa', 'Descripcion', 'Fecha Entrega'], observed=True).agg(
+            Cajas=('Cajas', 'sum'),
+            Hora_Inicio_Min=('Hora Inicio', 'min'),
+            Hora_Termino_Max=('Hora Termino', 'max')
+        ).reset_index()
+
+
+        # Eliminar registros con valores nulos y corregir turnos nocturnos
+        valid_others = cajas_others.dropna(subset=['Hora_Inicio_Min', 'Hora_Termino_Max'])
+        mask_nocturno = valid_others['Hora_Termino_Max'] < valid_others['Hora_Inicio_Min']
+        valid_others.loc[mask_nocturno, 'Hora_Termino_Max'] += pd.Timedelta(days=1)
+        
+        # Filtrar registros inconsistentes
+        valid_others = valid_others[valid_others['Hora_Termino_Max'] >= valid_others['Hora_Inicio_Min']]
+        
+        # Calcular horas picking y rendimiento
+        valid_others['Horas Picking'] = (valid_others['Hora_Termino_Max'] - valid_others['Hora_Inicio_Min']).dt.total_seconds() / 3600
+        valid_others = valid_others[(valid_others['Horas Picking'] > 0) & (valid_others['Horas Picking'] < 12)]
+        valid_others['Rendimiento'] = valid_others['Cajas'] / valid_others['Horas Picking']
+        
+        # Filtrar rendimientos anómalos
+        valid_others = valid_others[valid_others['Rendimiento'] <= 500]
+        valid_others = valid_others[valid_others['Rendimiento'] >= 0]
+        valid_others = valid_others[valid_others['Rendimiento'] <= valid_others['Cajas']]
+        valid_others['Rendimiento'] = valid_others['Rendimiento'].round(2)
+        
+        # Unir ambos dataframes
+        df_valid = pd.concat([valid_others, cajas_imagen], ignore_index=True)
+        
+        return df_valid
     except Exception as e:
         st.error(f"Error en procesar_picking: {str(e)}")
-        return None
-
-def procesar_chequeo(df_chequeo):
-    """Procesa el dataframe de chequeo para calcular errores."""
-    try:
-        # ... resto del código de procesar_chequeo ...
-        pass
-    except Exception as e:
-        st.error(f"Error en procesar_chequeo: {str(e)}")
         return None
 
 def create_grouped_report(df_final):
     """Genera el reporte agrupado desde un DataFrame."""
     try:
-        # ... resto del código de create_grouped_report ...
-        pass
+        # Crear una copia profunda del DataFrame
+        df = df_final.copy()
+        
+        # Filtrar empresas y ordenar
+        df = df[df['Empresa'].isin(ORDER_EMPRESAS)]
+        df['Empresa'] = pd.Categorical(df['Empresa'], categories=ORDER_EMPRESAS, ordered=True)
+        
+        # Convertir a string antes de agrupar
+        df['USUARIO'] = df['USUARIO'].fillna('').astype(str)
+        
+        # Identificar usuarios PK_IMAGEN
+        pk_imagen_mask = df['USUARIO'].isin(PK_IMAGEN)
+        
+        # Agrupar con observed=True
+        df_subtotales = df.groupby('Empresa', observed=True).agg({
+            'CAJAS': 'sum',
+            'Cjs c/ Error': 'sum'
+        }).reset_index()
+        
+        # [resto del código igual]
+        
+        return df_final_report, min_rendimiento, mediana_rendimiento, max_rendimiento
+        
     except Exception as e:
         st.error(f"Error en create_grouped_report: {str(e)}")
-        return None, None, None, None
+        return None, np.nan, np.nan, np.nan
+
+def procesar_chequeo(df_chequeo):
+    """Procesa el dataframe de chequeo para calcular errores."""
+    try:
+        # Verificar y manejar las columnas necesarias
+        if 'Cantidad de unidades' not in df_chequeo.columns:
+            if 'Cantidad' in df_chequeo.columns:
+                df_chequeo['Cantidad de unidades'] = df_chequeo['Cantidad']
+            else:
+                df_chequeo['Cantidad de unidades'] = 0
+
+        if 'discqty' not in df_chequeo.columns:
+            if 'Descuento' in df_chequeo.columns:
+                df_chequeo['discqty'] = df_chequeo['Descuento']
+            else:
+                df_chequeo['discqty'] = 0
+
+        pallet_grouped = df_chequeo.groupby(['id usuario', 'empresa']).agg(
+            Total_Unidades=('Cantidad de unidades', 'sum'),
+            Total_Descuento=('discqty', 'sum')
+        ).reset_index()
+        
+        # Calcular porcentaje de error
+        pallet_grouped['% Error'] = (pallet_grouped['Total_Descuento'] / pallet_grouped['Total_Unidades']) * 100
+        pallet_grouped['% Error'] = pallet_grouped['% Error'].fillna(0).replace([np.inf, -np.inf], 0)
+        pallet_grouped['% Error'] = pallet_grouped['% Error'].round(2)
+        pallet_grouped['Total_Descuento'] = pallet_grouped['Total_Descuento'].round(0).astype(int)
+        
+        return pallet_grouped
+    except Exception as e:
+        st.error(f"Error en procesar_chequeo: {str(e)}")
+        return None
+
+def unir_datos(df_valid, pallet_grouped):
+    """Une los dataframes procesados de picking y chequeo."""
+    try:
+        df_final = pd.merge(
+            df_valid, pallet_grouped,
+            how='inner', 
+            left_on=['id usuario', 'Empresa'],
+            right_on=['id usuario', 'empresa']
+        )
+        
+        # Renombrar columnas
+        df_final.rename(columns={
+            'id usuario': 'USUARIO',
+            'Total_Descuento': 'Cjs c/ Error',
+            'Cajas': 'CAJAS'
+        }, inplace=True)
+        
+        # Seleccionar columnas requeridas
+        columnas_requeridas = ['Fecha Entrega', 'USUARIO', 'Empresa', 'Descripcion', 
+                              'CAJAS', 'Rendimiento', 'Cjs c/ Error', '% Error']
+        
+        # Verificar que todas las columnas requeridas existen
+        columnas_existentes = [col for col in columnas_requeridas if col in df_final.columns]
+        
+        # Asegurar que solo tenemos las empresas en ORDER_EMPRESAS
+        df_final = df_final[df_final['Empresa'].isin(ORDER_EMPRESAS)]
+        
+        return df_final[columnas_existentes]
+    except Exception as e:
+        st.error(f"Error en unir_datos: {str(e)}")
+        return None
+    
+def create_nivel_carga_summary(df_picking):
+    """Crea el resumen de nivel de carga, incluyendo Sub-LPN."""
+    try:
+        # Asegurarse de que tenemos las columnas necesarias
+        if 'Nivel de carga' not in df_picking.columns or 'Fecha Entrega' not in df_picking.columns or 'Cajas' not in df_picking.columns:
+            raise ValueError("Columnas necesarias no encontradas en df_picking")
+        
+        # No filtramos por nivel de carga, queremos incluir todos los niveles incluyendo "Sub-LPN"
+        pivot_nivel_carga = pd.pivot_table(
+            df_picking,
+            values='Cajas',
+            index='Nivel de carga',
+            columns='Fecha Entrega',
+            aggfunc='sum',
+            fill_value=0,
+            margins=True,
+            margins_name='Total general'
+        )
+        
+        # Ordenar el índice para que "Total general" aparezca al final
+        if 'Total general' in pivot_nivel_carga.index:
+            new_index = [idx for idx in pivot_nivel_carga.index if idx != 'Total general'] + ['Total general']
+            pivot_nivel_carga = pivot_nivel_carga.reindex(new_index)
+        
+        return pivot_nivel_carga
+    except Exception as e:
+        st.error(f"Error en nivel de carga: {str(e)}")
+        print("Error detallado:", str(e))
+        print("Columnas disponibles:", df_picking.columns.tolist() if df_picking is not None else "None")
+        return pd.DataFrame()
+
+def create_grouped_report(df_final):
+    """Genera el reporte agrupado desde un DataFrame."""
+    try:
+        # Verificar valores únicos en la columna Empresa
+        print("Valores únicos en Empresa antes de procesar:")
+        print(df_final['Empresa'].unique())
+        
+        # Limpiar y preparar datos
+        df = df_final.copy()
+        
+        # Filtrar solo las empresas que están en ORDER_EMPRESAS
+        df = df[df['Empresa'].isin(ORDER_EMPRESAS)]
+        
+        # Convertir a string antes de concatenar
+        df['USUARIO'] = df['USUARIO'].fillna('').astype(str)
+        
+        # Identificar usuarios PK_IMAGEN
+        pk_imagen_mask = df['USUARIO'].isin(PK_IMAGEN)
+        
+        # Calcular subtotales por empresa ordenados según ORDER_EMPRESAS
+        subtotales = []
+        for empresa in ORDER_EMPRESAS:
+            empresa_df = df[df['Empresa'] == empresa]
+            if not empresa_df.empty:
+                # Calcular subtotal
+                total_cajas = empresa_df['CAJAS'].sum()
+                total_error_cajas = empresa_df['Cjs c/ Error'].sum()
+                
+                # Calcular rendimiento promedio (excluyendo PK_IMAGEN)
+                empresa_no_pk = empresa_df[~empresa_df['USUARIO'].isin(PK_IMAGEN)]
+                rendimiento_promedio = np.nan
+                if not empresa_no_pk.empty and pd.notna(empresa_no_pk['Rendimiento']).any():
+                    rendimiento_promedio = empresa_no_pk['Rendimiento'].mean()
+                
+                subtotales.append({
+                    'Empresa': empresa,
+                    'USUARIO': f'Total {empresa}',
+                    'CAJAS': total_cajas,
+                    'Rendimiento': rendimiento_promedio,
+                    'Cjs c/ Error': total_error_cajas,
+                    '% Error': (total_error_cajas / total_cajas * 100) if total_cajas > 0 else 0
+                })
+        
+        df_subtotales = pd.DataFrame(subtotales)
+        
+        # Calcular total general
+        total_cajas = df['CAJAS'].sum()
+        total_error_cajas = df['Cjs c/ Error'].sum()
+        rendimiento_promedio = df[~pk_imagen_mask]['Rendimiento'].mean() if (~pk_imagen_mask).any() else np.nan
+        
+        df_total_general = pd.DataFrame([{
+            'Empresa': 'TOTAL GENERAL',
+            'USUARIO': 'TOTAL GENERAL',
+            'CAJAS': total_cajas,
+            'Rendimiento': rendimiento_promedio,
+            'Cjs c/ Error': total_error_cajas,
+            '% Error': (total_error_cajas / total_cajas * 100) if total_cajas > 0 else 0
+        }])
+        
+        # Unir todos los dataframes
+        df_final_report = pd.concat([df, df_subtotales, df_total_general], ignore_index=True)
+        
+        # Calcular estadísticas para el coloreado
+        rendimientos_validos = df[~pk_imagen_mask]['Rendimiento'].dropna()
+        min_rendimiento = rendimientos_validos.min() if not rendimientos_validos.empty else np.nan
+        mediana_rendimiento = rendimientos_validos.median() if not rendimientos_validos.empty else np.nan
+        max_rendimiento = rendimientos_validos.max() if not rendimientos_validos.empty else np.nan
+        
+        return df_final_report, min_rendimiento, mediana_rendimiento, max_rendimiento, df_total_general
+        
+    except Exception as e:
+        st.error(f"Error en create_grouped_report: {str(e)}")
+        return None, np.nan, np.nan, np.nan
