@@ -7,7 +7,7 @@ from googleapiclient.http import MediaIoBaseDownload
 import io
 
 # Definición de constantes
-PK_IMAGEN = {'SEBIGSEGO', 'CTAPIAV', 'DIENIALPU'}
+PK_IMAGEN = {'SEBIGSEGO', 'OPEREZVAR', 'DIENIALPU'}
 ZONA_TRABAJO = {'Zona Trabajo Licores 02', 'Zona Trabajo Modula'}
 ZONA_CHEQUEO = {'ZT-LIC-02', 'ZT-MOD'}
 ORDER_EMPRESAS = ["SAEP", "SINERGY", "J. CATALAN Y CIA. LTDA", "IMAGEN", "J. CATALAN Y CIA. LTDA RED BULL"]
